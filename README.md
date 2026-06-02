@@ -6,6 +6,25 @@ A step-by-step guide to adding and configuring swap space on Ubuntu servers (20.
 
 ---
 
+## ⚡ One-Line Setup
+
+Run this on your server to set up swap automatically:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/ali934h/ubuntu-swap-setup/main/setup.sh | sudo bash
+```
+
+The script will:
+- Detect your RAM and recommend the right swap size
+- Ask for confirmation before doing anything
+- Auto-select `swappiness` based on your RAM (low-RAM servers get higher values to avoid OOM)
+- Make swap permanent across reboots
+- Tune kernel parameters for best performance
+
+> ✅ Safe to run on servers with as little as **512MB RAM**
+
+---
+
 ## 📖 What is Swap?
 
 Swap is a portion of hard drive storage reserved for the OS to temporarily store data when RAM is full. It acts as a safety net against **out-of-memory (OOM)** errors — especially useful on servers with limited RAM.
@@ -47,7 +66,7 @@ Look at the row with `/` in the `Mounted on` column. Make sure you have enough f
 
 | RAM | Recommended Swap |
 |-----|-----------------|
-| ≤ 2 GB | 2x RAM (e.g., 4 GB) |
+| ≤ 2 GB | 2x RAM (e.g., 1GB RAM → 2GB swap) |
 | 2–8 GB | Equal to RAM |
 | > 8 GB | At least 4 GB |
 
@@ -124,22 +143,26 @@ echo '/swapfile none swap sw 0 0' | sudo tee -a /etc/fstab
 
 Controls how often the OS uses swap (0 = avoid swap, 100 = use swap aggressively).
 
+The right value depends on your available RAM:
+
+| RAM | Recommended Swappiness | Reason |
+|-----|------------------------|--------|
+| ≤ 1 GB | 60 | Avoid OOM — use swap early |
+| 1–4 GB | 30 | Balanced |
+| > 4 GB | 10 | Keep data in RAM as long as possible |
+
 Check current value:
 
 ```bash
 cat /proc/sys/vm/swappiness
 ```
 
-Set it to `10` (recommended for servers):
+Set and persist (example for low-RAM servers):
 
 ```bash
-sudo sysctl vm.swappiness=10
-```
-
-Make it persistent:
-
-```bash
-echo 'vm.swappiness=10' | sudo tee -a /etc/sysctl.conf
+sudo sysctl vm.swappiness=60
+echo 'vm.swappiness=60' | sudo tee -a /etc/sysctl.conf
+sudo sysctl -p
 ```
 
 ### 🔧 Cache Pressure
@@ -152,16 +175,12 @@ Check current value:
 cat /proc/sys/vm/vfs_cache_pressure
 ```
 
-Set it to `50` (recommended):
+Set it to `50` (recommended for all servers):
 
 ```bash
 sudo sysctl vm.vfs_cache_pressure=50
-```
-
-Make it persistent:
-
-```bash
 echo 'vm.vfs_cache_pressure=50' | sudo tee -a /etc/sysctl.conf
+sudo sysctl -p
 ```
 
 ---
@@ -177,17 +196,18 @@ sudo nano /etc/fstab
 
 ---
 
-## 📋 Quick Reference
+## 📋 Quick Reference (Manual)
 
 ```bash
-# Full setup — 2GB swap
-sudo fallocate -l 2G /swapfile
+# Full setup — adjust swap size as needed
+SWAP_SIZE=2G
+sudo fallocate -l $SWAP_SIZE /swapfile
 sudo chmod 600 /swapfile
 sudo mkswap /swapfile
 sudo swapon /swapfile
 echo '/swapfile none swap sw 0 0' | sudo tee -a /etc/fstab
 
-# Optional tuning
+# Tune — adjust swappiness based on your RAM (see table above)
 echo 'vm.swappiness=10' | sudo tee -a /etc/sysctl.conf
 echo 'vm.vfs_cache_pressure=50' | sudo tee -a /etc/sysctl.conf
 sudo sysctl -p
